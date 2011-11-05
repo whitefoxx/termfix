@@ -1,13 +1,12 @@
 # -*- coding: utf-8 -*-
 """
-Created on Thu Nov 03 20:47:51 2011
+Created on Sat Nov 05 15:09:06 2011
 
 @author: cyb
 """
 
 import os
 import cPickle
-import math
 
 corpus_path = "E:/data/email/corpus/trec06c/trec06c/"
 
@@ -47,31 +46,29 @@ def gen_test():
     cPickle.dump(test, pickle_f)
     return test
 
-def logistic(x):
-    return 1.0 / (1 + math.exp(-x))
-    
-def LR_train(train, theta, lrate, max_loop = 10):
+def pam_train(train, afa, bta, max_loop=10):
+    print 'PAM train begin ...',"afa=" + str(afa),"bta=" + str(bta),"max_loop=" + str(max_loop)
     dimension = len(train[0]) - 1
+    weight = [0 for i in range(dimension)]
     classify = {}
     for l in range(max_loop):
         p2n = 0; n2p = 0; p2p = 0; n2n = 0
         for t in train:
-            s = sum([theta[i] * t[i+1] for i in range(dimension)])
-            p = logistic(s)
-            d = 0
-            if t[0] == '+1' and p < 0.5:
-                p2n += 1
-                d = 1 - p
-            elif t[0] == '-1' and p >= 0.5:
-                n2p += 1
-                d = -p
-            elif t[0] == '+1':
+            label = int(t[0])
+            s = sum([weight[i] * t[i+1] for i in range(dimension)]) * label
+            if s < afa:
+                for i in range(dimension):
+                    weight[i] += bta * label * t[i+1]
+                if label == 1:
+                    p2n += 1
+                else:
+                    n2p += 1
+            elif label == 1:
                 p2p += 1
             else:
                 n2n += 1
-            for i in range(dimension):
-                theta[i] += lrate * d * t[i+1]
-        classify['theta'] = theta
+
+        classify['w'] = weight
         classify['p+1'] = float(p2p) / (p2p + n2p)
         classify['p-1'] = float(n2n) / (n2n + p2n)
         classify['r+1'] = float(p2p) / (p2p + p2n)
@@ -83,33 +80,28 @@ def LR_train(train, theta, lrate, max_loop = 10):
             str(classify['r-1']),str(classify['f-1'])
     return classify
 
-def LR_test(test, theta):
+def pam_predict(test, weight, afa):
     dimension = len(test[0]) - 1
     p2n = 0; n2p = 0; p2p = 0; n2n = 0
     for t in test:
-        s = sum([theta[i] * t[i+1] for i in range(dimension)])
-        p = logistic(s)
-        if p > 0.5:
-            p_label = '+1'
-        else:
-            p_label = '-1'
-        if t[0] == p_label:
-            if t[0] == '+1':
-                p2p += 1
-            else:
-                n2n += 1
-        else:
-            if t[0] == '+1':
+        label = int(t[0])
+        s = sum([weight[i] * t[i+1] for i in range(dimension)]) * label
+        if s < afa:
+            if label == 1:
                 p2n += 1
             else:
                 n2p += 1
+        elif label == 1:
+            p2p += 1
+        else:
+            n2n += 1
     print str(n2p) + '/' + str(p2p + n2p), str(p2n) + '/' + str(n2n + p2n), len(test)
-    
+
 if __name__ == '__main__':
     train = gen_train()
     test = gen_test()
-#    cls1 = winnow_train(train, 2, 0, 7)
-    theta = [0.0 for i in range(len(train) - 1)]
-    cls = LR_train(train, theta, 0.02, 30) #22/2213 7/4249 6462
-    LR_test(test, cls['theta'])
+    cls = pam_train(train, 1.5, 0.1, 15)
+    print "single model result"
+    pam_predict(test, cls['w'], 1.5)
+    
     
